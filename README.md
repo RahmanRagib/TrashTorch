@@ -8,7 +8,9 @@ System Restore point, then clears junk/temp files and reclaims disk space.
 
 ## Features
 
-- Creates a **System Restore point** before touching anything.
+- Enables System Protection for the system drive and creates a
+  **System Restore point** before deleting anything (bypasses the default
+  24-hour restore-point throttle).
 - Cleans per-user temp, `INetCache`, thumbnail/icon cache, WER reports,
   crash dumps and browser caches (Edge/Chrome).
 - Cleans system temp, Prefetch, Windows Update download cache, CBS logs,
@@ -21,12 +23,29 @@ System Restore point, then clears junk/temp files and reclaims disk space.
 - Removes old restore points (keeps the newest) and caps shadow storage at 5%.
 - Prints a before/after free-space summary and writes a per-run log.
 
+## How it works
+
+The script runs as seven steps and echoes each one to the console:
+
+1. **Restore point** - enables System Protection and creates a
+   `Pre-Cleanup Restore Point`.
+2. **Temp & cache files** - clears the per-user and system locations listed
+   above.
+3. **Disk Cleanup** - the optional, manual `cleanmgr` step (see below).
+4. **Recycle Bin** - emptied.
+5. **DISM** - `Dism /Online /Cleanup-Image /StartComponentCleanup /ResetBase`.
+6. **Restore points** - removes all but the newest and resizes shadow storage
+   to 5% of the system drive.
+7. **Summary** - prints free space before/after, space reclaimed and the log
+   path.
+
 ## Requirements
 
 - Windows 10 or 11
 - PowerShell 5.1+ (ships with Windows)
 - Administrator rights (the script requests elevation by itself)
-- System Protection enabled for the system drive (for restore points)
+- System Protection available (the script enables it on the system drive for
+  the restore point)
 
 ## Usage
 
@@ -74,8 +93,9 @@ Passing `-Yes` skips this step, since it needs a user in front of the screen.
 
 ## Logs
 
-A log is written to `C:\clean-logs\cleanup_<timestamp>.log`. The previous run's
-log in that folder is deleted on each run, so only the latest one is kept.
+A log is written to `%SystemDrive%\clean-logs\cleanup_<yyyyMMdd_HHmmss>.log`
+(usually `C:\clean-logs\`). All previous `.log` files in that folder are deleted
+at the start of each run, so only the latest one is kept.
 
 ## What it does NOT touch
 
