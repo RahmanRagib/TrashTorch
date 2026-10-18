@@ -1,7 +1,7 @@
 # TrashTorch
 
 A vibecoded Windows cleanup tool that runs in an elevated console, creates a
-System Restore point, then clears junk/temp files and reclaims disk space.
+System Restore point, then clears junk/temp files.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 ![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-blue)
@@ -28,8 +28,7 @@ System Restore point, then clears junk/temp files and reclaims disk space.
 
 ## Usage
 
-Clone or download the repo, then double-click `SystemCleanup.cmd` and approve
-the UAC prompt. It elevates itself automatically.
+Clone or download the repo, then double-click `SystemCleanup.cmd` and proceed/cancel with Y/N. It elevates itself automatically.
 
 ```bat
 SystemCleanup.cmd
@@ -37,7 +36,7 @@ SystemCleanup.cmd
 
 ### Dry run (recommended first)
 
-Preview every action without deleting anything:
+Previews every action without deleting anything:
 
 ```bat
 SystemCleanup.cmd -DryRun
