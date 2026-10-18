@@ -8,12 +8,8 @@
     Show what would be cleaned without deleting or changing anything.
 
 .PARAMETER Yes
-    Skip the interactive confirmation prompt.
-
-.PARAMETER Interactive
-    Open the Windows Disk Cleanup window (elevated, so the "Clean up system
-    files" categories are available) instead of cleaning the categories
-    automatically.
+    Skip the interactive confirmation prompt. This also skips the (manual)
+    Disk Cleanup step, since that step needs a user in front of the screen.
 
 .EXAMPLE
     .\Invoke-SystemCleanup.ps1
@@ -21,14 +17,11 @@
     .\Invoke-SystemCleanup.ps1 -DryRun
 .EXAMPLE
     .\Invoke-SystemCleanup.ps1 -Yes
-.EXAMPLE
-    .\Invoke-SystemCleanup.ps1 -Interactive
 #>
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [switch]$Yes,
-    [switch]$Interactive
+    [switch]$Yes
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -50,9 +43,8 @@ if (-not (Test-Admin)) {
     Write-Host 'Requesting administrator privileges...' -ForegroundColor Yellow
     $exe = (Get-Process -Id $PID).Path
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
-    if ($DryRun)      { $argList += '-DryRun' }
-    if ($Yes)         { $argList += '-Yes' }
-    if ($Interactive) { $argList += '-Interactive' }
+    if ($DryRun) { $argList += '-DryRun' }
+    if ($Yes)    { $argList += '-Yes' }
     Start-Process -FilePath $exe -Verb RunAs -ArgumentList $argList
     exit
 }
@@ -87,68 +79,61 @@ function Clear-FolderPattern {
         Remove-Item -Force
 }
 
-function Set-DiskCleanupProfile {
-    param([int]$ProfileId)
-    $exclude = @('Downloads')
-    $roots = @(
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches',
-        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches',
-        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches'
-    )
-    foreach ($root in $roots) {
-        if (-not (Test-Path -LiteralPath $root)) { continue }
-        Get-ChildItem -LiteralPath $root | ForEach-Object {
-            $state = if ($exclude -contains $_.PSChildName) { 0 } else { 2 }
-            New-ItemProperty -LiteralPath $_.PSPath -Name "StateFlags$ProfileId" `
-                -Value $state -PropertyType DWord -Force | Out-Null
-        }
+function Start-DiskCleanupDialog {
+    param([string]$Drive)
+
+    Start-Process -FilePath 'cleanmgr.exe' -ArgumentList "/d $Drive" -Wait
+
+    $idle = 0
+    while ($idle -lt 6) {
+        if (Get-Process -Name cleanmgr -ErrorAction SilentlyContinue) { $idle = 0 }
+        else { $idle++ }
+        Start-Sleep -Milliseconds 500
     }
 }
 
 function Invoke-DiskCleanup {
-    param([int]$ProfileId = 5140)
-
     if ($DryRun) {
-        Write-Log '  [dry-run] Would run Windows Disk Cleanup (cleanmgr)' Gray
+        Write-Log '  [dry-run] Would offer to run Windows Disk Cleanup' Gray
         return
     }
 
-    if ($Interactive) {
-        $mode = 'gui'
-    }
-    elseif ($Yes) {
-        $mode = 'auto'
-    }
-    else {
-        Write-Host ''
-        Write-Host '  Windows Disk Cleanup' -ForegroundColor White
-        Write-Host '    1) Automatic   - clean preset categories, incl. system files (no window)' -ForegroundColor Gray
-        Write-Host '    2) Interactive - open Disk Cleanup so you pick the categories' -ForegroundColor Gray
-        Write-Host '    S) Skip' -ForegroundColor Gray
-        do {
-            $key = (Read-Host '  Choice [1/2/S]').Trim()
-        } until ($key -match '^(?i)[12s]$')
-        $mode = switch ($key.ToUpper()) { '1' { 'auto' } '2' { 'gui' } 'S' { 'skip' } }
+    if ($Yes) {
+        Write-Log '  Disk Cleanup skipped (it is a manual step).' Gray
+        return
     }
 
-    switch ($mode) {
-        'skip' {
-            Write-Log '  Disk Cleanup skipped.' Gray
-            return
-        }
-        'gui' {
-            Write-Log '  Opening Disk Cleanup window (elevated)...' Gray
-            Start-Process -FilePath 'cleanmgr.exe' -Wait
-            Write-Log '  Disk Cleanup window closed.' Green
-            return
-        }
+    Write-Host ''
+    $answer = Read-Host '  Run Windows Disk Cleanup now? (Y/N)'
+    if ($answer -notmatch '^(?i)Y(es)?$') {
+        Write-Log '  Disk Cleanup skipped.' Gray
+        return
     }
 
-    Write-Log '  Configuring cleanup categories...' Gray
-    Set-DiskCleanupProfile -ProfileId $ProfileId
-    Write-Log ('  Running: cleanmgr /sagerun:{0}' -f $ProfileId) DarkGray
-    Start-Process -FilePath 'cleanmgr.exe' -ArgumentList "/sagerun:$ProfileId" -Wait
-    Write-Log '  Windows Disk Cleanup completed.' Green
+    $drives = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' |
+        Sort-Object DeviceID | Select-Object -ExpandProperty DeviceID)
+    if (-not $drives) { $drives = @($env:SystemDrive) }
+    $systemDrive = $env:SystemDrive
+
+    Write-Host ''
+    Write-Host '  Which drive(s) should Disk Cleanup open for?' -ForegroundColor White
+    Write-Host ("    1) Main drive only  ({0})" -f $systemDrive) -ForegroundColor Gray
+    Write-Host ("    2) All drives        ({0})" -f ($drives -join ', ')) -ForegroundColor Gray
+    do {
+        $pick = (Read-Host '  Choice [1/2]').Trim()
+    } until ($pick -match '^[12]$')
+
+    $targets = if ($pick -eq '1') { @($systemDrive) } else { $drives }
+
+    $first = $true
+    foreach ($drive in $targets) {
+        if (-not $first) { Start-Sleep -Seconds 3 }
+        $first = $false
+        Write-Log ("  Opening Disk Cleanup for {0} - clean it, then close the window..." -f $drive) Gray
+        Start-DiskCleanupDialog -Drive $drive
+        Write-Log ("  {0} closed." -f $drive) Green
+    }
+    Write-Log '  Windows Disk Cleanup finished.' Green
 }
 
 Write-Log '==================================================' Cyan

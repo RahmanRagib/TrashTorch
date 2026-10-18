@@ -14,9 +14,8 @@ System Restore point, then clears junk/temp files and reclaims disk space.
 - Cleans system temp, Prefetch, Windows Update download cache, CBS logs,
   minidumps, `Downloaded Program Files`, WER archive/queue, orphaned
   `*.etl`/`*.log` files, `MEMORY.DMP` and LiveKernelReports.
-- Runs **Windows Disk Cleanup** (`cleanmgr`) — automatic by default, or
-  `-Interactive` to open the elevated window (the "Clean up system files"
-  categories, since the script already runs as admin).
+- Offers a **manual Windows Disk Cleanup** (`cleanmgr`) step: you choose the
+  main drive or all drives, and clean them yourself in the normal UI.
 - Empties the Recycle Bin.
 - Runs **DISM** `/StartComponentCleanup /ResetBase`.
 - Removes old restore points (keeps the newest) and caps shadow storage at 5%.
@@ -55,19 +54,23 @@ You can also call the PowerShell script directly:
 
 ## Parameters
 
-| Parameter      | Description                                                        |
-| -------------- | ------------------------------------------------------------------ |
-| `-DryRun`      | Show what would be cleaned without changing anything.              |
-| `-Yes`         | Skip the interactive "Continue? (y/N)" prompt.                     |
-| `-Interactive` | Open the elevated Disk Cleanup window instead of cleaning silently. |
+| Parameter | Description                                                          |
+| --------- | -------------------------------------------------------------------- |
+| `-DryRun` | Show what would be cleaned without changing anything.                |
+| `-Yes`    | Skip the interactive prompts (including the manual Disk Cleanup step). |
 
 ### Disk Cleanup step
 
-By default the script asks whether to run Disk Cleanup **automatically**
-(preset categories, including system-file ones, cleaned with no window) or
-**interactively** (opens the Disk Cleanup UI so you pick categories). Pass
-`-Interactive` to skip the question and always get the window, or `-Yes` to
-always run it automatically. The user `Downloads` category is never selected.
+Disk Cleanup is a **manual** step. The script asks whether to run it, and if so
+whether to open it for the **main drive only** or for **every fixed drive** on
+the PC. It then launches the normal Disk Cleanup window for each chosen drive
+one at a time (waiting for you to close each before opening the next) — you do
+the cleanup yourself.
+
+The window is already elevated (the script runs as admin), so the system-file
+categories are available directly and no extra UAC prompt appears.
+
+Passing `-Yes` skips this step, since it needs a user in front of the screen.
 
 ## Logs
 
