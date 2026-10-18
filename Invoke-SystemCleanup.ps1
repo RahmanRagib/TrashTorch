@@ -87,10 +87,10 @@ Write-Log '==================================================' Cyan
 if (-not $Yes -and -not $DryRun) {
     Write-Host ''
     Write-Host 'This will delete temp/junk files, empty the Recycle Bin,' -ForegroundColor Yellow
-    Write-Host 'remove old restore points and run DISM /ResetBase.' -ForegroundColor Yellow
-    Write-Host 'After /ResetBase, installed Windows updates can no longer be uninstalled.' -ForegroundColor Yellow
-    $answer = Read-Host 'Continue? (y/N)'
-    if ($answer -notmatch '^(y|yes)$') {
+    Write-Host 'remove old restore points and run DISM Cleanup(ResetBase).' -ForegroundColor Yellow
+    Write-Host 'After DISM Cleanup, installed Windows updates can no longer be uninstalled.' -ForegroundColor Yellow
+    $answer = Read-Host 'Continue? (Y/N)'
+    if ($answer -cnotmatch '^(Y|YES)$') {
         Write-Log 'Aborted by user.' Red
         return
     }

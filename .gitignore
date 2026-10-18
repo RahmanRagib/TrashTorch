@@ -1,0 +1,13 @@
+# Cleanup logs
+*.log
+cleanup_*.log
+
+# OS junk
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
