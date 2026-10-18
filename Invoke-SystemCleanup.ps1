@@ -10,17 +10,25 @@
 .PARAMETER Yes
     Skip the interactive confirmation prompt.
 
+.PARAMETER Interactive
+    Open the Windows Disk Cleanup window (elevated, so the "Clean up system
+    files" categories are available) instead of cleaning the categories
+    automatically.
+
 .EXAMPLE
     .\Invoke-SystemCleanup.ps1
 .EXAMPLE
     .\Invoke-SystemCleanup.ps1 -DryRun
 .EXAMPLE
     .\Invoke-SystemCleanup.ps1 -Yes
+.EXAMPLE
+    .\Invoke-SystemCleanup.ps1 -Interactive
 #>
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [switch]$Yes
+    [switch]$Yes,
+    [switch]$Interactive
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -42,8 +50,9 @@ if (-not (Test-Admin)) {
     Write-Host 'Requesting administrator privileges...' -ForegroundColor Yellow
     $exe = (Get-Process -Id $PID).Path
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
-    if ($DryRun) { $argList += '-DryRun' }
-    if ($Yes)    { $argList += '-Yes' }
+    if ($DryRun)      { $argList += '-DryRun' }
+    if ($Yes)         { $argList += '-Yes' }
+    if ($Interactive) { $argList += '-Interactive' }
     Start-Process -FilePath $exe -Verb RunAs -ArgumentList $argList
     exit
 }
@@ -78,6 +87,70 @@ function Clear-FolderPattern {
         Remove-Item -Force
 }
 
+function Set-DiskCleanupProfile {
+    param([int]$ProfileId)
+    $exclude = @('Downloads')
+    $roots = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches'
+    )
+    foreach ($root in $roots) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        Get-ChildItem -LiteralPath $root | ForEach-Object {
+            $state = if ($exclude -contains $_.PSChildName) { 0 } else { 2 }
+            New-ItemProperty -LiteralPath $_.PSPath -Name "StateFlags$ProfileId" `
+                -Value $state -PropertyType DWord -Force | Out-Null
+        }
+    }
+}
+
+function Invoke-DiskCleanup {
+    param([int]$ProfileId = 5140)
+
+    if ($DryRun) {
+        Write-Log '  [dry-run] Would run Windows Disk Cleanup (cleanmgr)' Gray
+        return
+    }
+
+    if ($Interactive) {
+        $mode = 'gui'
+    }
+    elseif ($Yes) {
+        $mode = 'auto'
+    }
+    else {
+        Write-Host ''
+        Write-Host '  Windows Disk Cleanup' -ForegroundColor White
+        Write-Host '    1) Automatic   - clean preset categories, incl. system files (no window)' -ForegroundColor Gray
+        Write-Host '    2) Interactive - open Disk Cleanup so you pick the categories' -ForegroundColor Gray
+        Write-Host '    S) Skip' -ForegroundColor Gray
+        do {
+            $key = (Read-Host '  Choice [1/2/S]').Trim()
+        } until ($key -match '^(?i)[12s]$')
+        $mode = switch ($key.ToUpper()) { '1' { 'auto' } '2' { 'gui' } 'S' { 'skip' } }
+    }
+
+    switch ($mode) {
+        'skip' {
+            Write-Log '  Disk Cleanup skipped.' Gray
+            return
+        }
+        'gui' {
+            Write-Log '  Opening Disk Cleanup window (elevated)...' Gray
+            Start-Process -FilePath 'cleanmgr.exe' -Wait
+            Write-Log '  Disk Cleanup window closed.' Green
+            return
+        }
+    }
+
+    Write-Log '  Configuring cleanup categories...' Gray
+    Set-DiskCleanupProfile -ProfileId $ProfileId
+    Write-Log ('  Running: cleanmgr /sagerun:{0}' -f $ProfileId) DarkGray
+    Start-Process -FilePath 'cleanmgr.exe' -ArgumentList "/sagerun:$ProfileId" -Wait
+    Write-Log '  Windows Disk Cleanup completed.' Green
+}
+
 Write-Log '==================================================' Cyan
 Write-Log ' Windows System Cleanup' Cyan
 Write-Log (" Log: {0}" -f $LogFile) Cyan
@@ -86,8 +159,9 @@ Write-Log '==================================================' Cyan
 
 if (-not $Yes -and -not $DryRun) {
     Write-Host ''
-    Write-Host 'This will delete temp/junk files, empty the Recycle Bin,' -ForegroundColor Yellow
-    Write-Host 'remove old restore points and run DISM Cleanup(ResetBase).' -ForegroundColor Yellow
+    Write-Host 'This will delete temp/junk files, run Windows Disk Cleanup,' -ForegroundColor Yellow
+    Write-Host 'empty the Recycle Bin, remove old restore points and run' -ForegroundColor Yellow
+    Write-Host 'DISM Cleanup (ResetBase).' -ForegroundColor Yellow
     Write-Host 'After DISM Cleanup, installed Windows updates can no longer be uninstalled.' -ForegroundColor Yellow
     $answer = Read-Host 'Continue? (Y/N)'
     if ($answer -cnotmatch '^(Y|YES)$') {
@@ -99,7 +173,7 @@ if (-not $Yes -and -not $DryRun) {
 $startFree = Get-FreeSpaceGB
 Write-Log ("Starting free space: {0} GB" -f $startFree) Gray
 
-Write-Log "`n[1/6] Creating a System Restore point..." Cyan
+Write-Log "`n[1/7] Creating a System Restore point..." Cyan
 if ($DryRun) {
     Write-Log '  [dry-run] Would create a restore point' Gray
 }
@@ -116,7 +190,7 @@ else {
     }
 }
 
-Write-Log "`n[2/6] Cleaning temp and cache files..." Cyan
+Write-Log "`n[2/7] Cleaning temp and cache files..." Cyan
 $userProfiles = Get-ChildItem -LiteralPath (Join-Path $env:SystemDrive 'Users') -Directory |
     Where-Object { $_.Name -notin @('Public', 'Default', 'Default User', 'All Users') }
 
@@ -151,7 +225,10 @@ if (-not $DryRun) {
         Remove-Item -Force
 }
 
-Write-Log "`n[3/6] Emptying the Recycle Bin..." Cyan
+Write-Log "`n[3/7] Running Windows Disk Cleanup..." Cyan
+Invoke-DiskCleanup
+
+Write-Log "`n[4/7] Emptying the Recycle Bin..." Cyan
 if ($DryRun) {
     Write-Log '  [dry-run] Would empty the Recycle Bin' Gray
 }
@@ -163,7 +240,7 @@ else {
     catch { }
 }
 
-Write-Log "`n[4/6] Running DISM component cleanup /ResetBase..." Cyan
+Write-Log "`n[5/7] Running DISM component cleanup /ResetBase..." Cyan
 if ($DryRun) {
     Write-Log '  [dry-run] Would run: Dism /Online /Cleanup-Image /StartComponentCleanup /ResetBase' Gray
 }
@@ -174,7 +251,7 @@ else {
     else { Write-Log "  DISM returned exit code $LASTEXITCODE" Yellow }
 }
 
-Write-Log "`n[5/6] Removing old restore points..." Cyan
+Write-Log "`n[6/7] Removing old restore points..." Cyan
 if ($DryRun) {
     Write-Log '  [dry-run] Would remove old restore points, keep the newest' Gray
 }
@@ -195,7 +272,7 @@ else {
     }
 }
 
-Write-Log "`n[6/6] Summary" Cyan
+Write-Log "`n[7/7] Summary" Cyan
 $endFree = Get-FreeSpaceGB
 $freed = [math]::Round($endFree - $startFree, 2)
 Write-Log ("  Free space before : {0} GB" -f $startFree)

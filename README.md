@@ -1,7 +1,7 @@
 # TrashTorch
 
 A vibecoded Windows cleanup tool that runs in an elevated console, creates a
-System Restore point, then clears junk/temp files.
+System Restore point, then clears junk/temp files and reclaims disk space.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 ![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-blue)
@@ -14,6 +14,9 @@ System Restore point, then clears junk/temp files.
 - Cleans system temp, Prefetch, Windows Update download cache, CBS logs,
   minidumps, `Downloaded Program Files`, WER archive/queue, orphaned
   `*.etl`/`*.log` files, `MEMORY.DMP` and LiveKernelReports.
+- Runs **Windows Disk Cleanup** (`cleanmgr`) — automatic by default, or
+  `-Interactive` to open the elevated window (the "Clean up system files"
+  categories, since the script already runs as admin).
 - Empties the Recycle Bin.
 - Runs **DISM** `/StartComponentCleanup /ResetBase`.
 - Removes old restore points (keeps the newest) and caps shadow storage at 5%.
@@ -28,7 +31,8 @@ System Restore point, then clears junk/temp files.
 
 ## Usage
 
-Clone or download the repo, then double-click `SystemCleanup.cmd` and proceed/cancel with Y/N. It elevates itself automatically.
+Clone or download the repo, then double-click `SystemCleanup.cmd` and approve
+the UAC prompt. It elevates itself automatically.
 
 ```bat
 SystemCleanup.cmd
@@ -36,7 +40,7 @@ SystemCleanup.cmd
 
 ### Dry run (recommended first)
 
-Previews every action without deleting anything:
+Preview every action without deleting anything:
 
 ```bat
 SystemCleanup.cmd -DryRun
@@ -51,10 +55,19 @@ You can also call the PowerShell script directly:
 
 ## Parameters
 
-| Parameter | Description                                              |
-| --------- | -------------------------------------------------------- |
-| `-DryRun` | Show what would be cleaned without changing anything.    |
-| `-Yes`    | Skip the interactive "Continue? (y/N)" prompt.           |
+| Parameter      | Description                                                        |
+| -------------- | ------------------------------------------------------------------ |
+| `-DryRun`      | Show what would be cleaned without changing anything.              |
+| `-Yes`         | Skip the interactive "Continue? (y/N)" prompt.                     |
+| `-Interactive` | Open the elevated Disk Cleanup window instead of cleaning silently. |
+
+### Disk Cleanup step
+
+By default the script asks whether to run Disk Cleanup **automatically**
+(preset categories, including system-file ones, cleaned with no window) or
+**interactively** (opens the Disk Cleanup UI so you pick categories). Pass
+`-Interactive` to skip the question and always get the window, or `-Yes` to
+always run it automatically. The user `Downloads` category is never selected.
 
 ## Logs
 
