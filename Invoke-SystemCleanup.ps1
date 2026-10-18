@@ -117,8 +117,8 @@ function Invoke-DiskCleanup {
 
     Write-Host ''
     Write-Host '  Which drive(s) should Disk Cleanup open for?' -ForegroundColor White
-    Write-Host ("    1) Main drive only  ({0})" -f $systemDrive) -ForegroundColor Gray
-    Write-Host ("    2) All drives        ({0})" -f ($drives -join ', ')) -ForegroundColor Gray
+    Write-Host ("    1) {0} ({1})" -f 'Main drive only'.PadRight(15), $systemDrive) -ForegroundColor Gray
+    Write-Host ("    2) {0} ({1})" -f 'All drives'.PadRight(15), ($drives -join ', ')) -ForegroundColor Gray
     do {
         $pick = (Read-Host '  Choice [1/2]').Trim()
     } until ($pick -match '^[12]$')
